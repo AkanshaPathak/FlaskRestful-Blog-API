@@ -6,13 +6,12 @@ from library.gmail.mail import mail_otp
 from library.otp.otp import generate_otp
 from flask import render_template, make_response, redirect
 from werkzeug.security import generate_password_hash
-from src.response_status import status
 from src.main_logger import set_up_logging
-from src.constant import Constant
+from src.response import Resp
 import hashlib
 
 logger = set_up_logging()
-constants = Constant()
+resp = Resp()
 
 
 class ValidateOtp(Resource):
@@ -26,20 +25,17 @@ class ValidateOtp(Resource):
             # Code Found but Expired
             if datetime.datetime.now() > valid_code[0][1]:
                 ValidateCode.delete_code(email)
-                status[406]["message"] = "OTP is expired"
-                return constants.response(status[406])
+                return resp.http_406(data="OTP is expired")
             if int(data['code']) == valid_code[0][0]:
                 ValidateCode.delete_code(email)
                 User.activate_user(email)
-                status[201]["message"] = "User account activated"
-                return constants.response(status[201])
+                return resp.http_201(data="User account activated")
 
             if int(data['code']) != valid_code[0][0]:
-                status[203]["message"] = "OTP is not valid"
-                return constants.response(status[203])
+                return resp.http_203(data="OTP is not valid")
         except Exception as ex:
             logger.exception(ex)
-            return constants.response(status[500])
+            return resp.http_500()
 
 
 class ResendOtp(Resource):
@@ -51,11 +47,10 @@ class ResendOtp(Resource):
             otp, expire_time = generate_otp()
             mail_otp(email, str(otp), "User")
             ValidateCode.insert_code(email, otp, expire_time)
-            status[201]["message"] = "OTP is sent to register email"
-            return constants.response(status[201])
+            return resp.http_201(data="OTP is sent to register email")
         except Exception as ex:
             logger.exception(ex)
-            return constants.response(status[500])
+            return resp.http_500()
 
 
 class ResetPassword(Resource):
@@ -72,14 +67,12 @@ class ResetPassword(Resource):
                 ResetHash.insert_hash(email, final_code)
                 url = "http://127.0.0.1:5000/forgot-password/" + final_code
                 mail_otp(email, url, user[0][1])
-                status[200]["message"] = "Mail sent to the user"
-                return constants.response(status[200])
+                return resp.http_200(data="Mail sent to the user")
             else:
-                status[404]["message"] = "User not found"
-                return constants.response(status[404])
+                return resp.http_404(data="User not found")
         except Exception as ex:
             logger.exception(ex)
-            return constants.response(status[500])
+            return resp.http_500()
 
 
 class GenerateReset(Resource):
@@ -107,8 +100,7 @@ class ValidateReset(Resource):
                 ResetHash.delete_hash(hash_val)
                 return redirect("https://www.raxoweb.com", code=302)
             else:
-                status[203]['message'] = "your information is not correct"
-                return constants.response(status[203])
+                return resp.http_203(data="your information is not correct")
         except Exception as ex:
             logger.exception(ex)
-            return constants.response(status[500])
+            return resp.http_500()

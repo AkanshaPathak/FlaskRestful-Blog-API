@@ -6,34 +6,37 @@ logger = set_up_logging()
 
 
 class User:
+    def __init__(self):
+        pass
+
     @staticmethod
     def user_exists(email):
         query = f"select id, public_id, username, password, email, admin, is_active from users where email = '{email}';"
-        return database.receive_query(query)
+        return database.select(query)
 
     @staticmethod
     def create_user(username, password, email, public_id, is_admin=0, is_active=0):
         query = f"INSERT INTO users (public_id, username, password, email, admin, is_active) VALUES('{public_id}'," \
                 f" '{username}', '{password}', '{email}', {is_admin}, {is_active}) ON DUPLICATE KEY UPDATE " \
                 f"username='{username}', password='{password}', admin={is_admin};"
-        return database.insert_query(query)
+        return database.insert(query)
 
     @staticmethod
     def activate_user(email):
         query = f"UPDATE users SET is_active=1 WHERE email='{email}';"
-        return database.update_query(query)
+        return database.update(query)
 
     @staticmethod
     def change_password(password, email):
         query = f"UPDATE users set password = '{password}' where email = '{email}';"
-        database.update_query(query)
+        return database.update(query)
 
 
 class ValidateCode:
     @staticmethod
     def validate_email(email):
         query = f"select code, expiretime from validate_code where email = '{email}'"
-        return database.receive_query(query)
+        return database.select(query)
 
     @staticmethod
     def delete_code(email):
@@ -45,7 +48,7 @@ class ValidateCode:
         query = f"INSERT INTO validate_code (email, code, expiretime)VALUES('{email}', {code}, '{expire_time}') ON " \
                 f"DUPLICATE KEY UPDATE code = {code}, expiretime='{expire_time}'; "
         logger.info(f"Insert OTP query: {query}")
-        return database.insert_query(query)
+        return database.insert(query)
 
 
 class ResetHash:
@@ -53,13 +56,13 @@ class ResetHash:
     def insert_hash(email, hash_code):
         query = f"INSERT INTO ResetHash (email, hash) VALUES('{email}', '{hash_code}') ON DUPLICATE KEY UPDATE" \
                 f" email='{email}', hash='{hash_code}';"
-        database.insert_query(query)
+        database.insert(query)
 
     @staticmethod
     def hash_exists(hash_value):
         query = f"select email from ResetHash where hash = '{hash_value}'"
         logger.info(query)
-        return database.receive_query(query)
+        return database.select(query)
 
     @staticmethod
     def delete_hash(hash_val):

@@ -4,9 +4,8 @@ from src.query_base.user_query import User, ValidateCode
 from library.gmail.mail import mail_otp
 from werkzeug.security import generate_password_hash
 from library.otp.otp import generate_otp
-from src.constant import Constant
+from src.response import Resp
 from src.main_logger import set_up_logging
-from src.response_status import status
 from blacklist import BLACKLIST
 import uuid
 from flask_jwt_extended import (
@@ -17,7 +16,7 @@ from flask_jwt_extended import (
     get_raw_jwt,
 )
 
-constants = Constant()
+resp = Resp()
 logger = set_up_logging()
 
 
@@ -30,8 +29,7 @@ class UserRegister(Resource):
         past_user = User.user_exists(data['email'])["data"]
         logger.info(past_user)
         if past_user and past_user[0][0] and past_user[0][1]:
-            status[409]["message"] = "A user with this email already exists"
-            return constants.response(status[409])
+            return resp.http_409(data="A user with this email already exists")
         try:
             hash_password = generate_password_hash(data['password'], method='sha256')
             out = User.create_user(data['username'], hash_password, data['email'], str(uuid.uuid4()))
@@ -41,11 +39,10 @@ class UserRegister(Resource):
             mail_otp(data['email'], str(otp), data['username'])
             logger.info(f"OTP: {otp}, Expire Time: {expire_time}")
             ValidateCode.insert_code(data['email'], otp, expire_time)
-            status[201]["message"] = "User created successfully."
-            return constants.response(status[201])
+            return resp.http_201(data="User created successfully.")
         except Exception as ex:
             logger.exception(ex)
-            return constants.response(status[500])
+            return resp.http_500()
 
 
 class Logout(Resource):
@@ -59,11 +56,10 @@ class Logout(Resource):
     def post(self):
         try:
             user_id = self.token_check()
-            status[200]['message'] = "User id: {} successfully logged out.".format(user_id)
-            return constants.response(status[200])
+            return resp.http_200(data=f"User id: {user_id} successfully logged out.")
         except Exception as ex:
             logger.exception(ex)
-            return constants.response(status[500])
+            return resp.http_500()
 
 
 class TokenRefresh(Resource):
@@ -71,5 +67,4 @@ class TokenRefresh(Resource):
     def post(self):
         current_user = get_jwt_identity()
         new_token = create_access_token(identity=current_user, fresh=False)
-        status[200]['message'] = new_token
-        return constants.response(status[200])
+        return resp.http_200(data={"token": new_token})

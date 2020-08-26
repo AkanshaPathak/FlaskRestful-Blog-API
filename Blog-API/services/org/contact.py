@@ -1,11 +1,11 @@
 from flask_restful import Resource
 from library.gmail.mail import mail_info, mail_me
 from flask import request
-from src.constant import Constant
-from src.response_status import status
+from src.response import Resp
 from src.main_logger import set_up_logging
 from src.query_base.org_query import Contact
-constants = Constant()
+
+resp = Resp()
 logger = set_up_logging()
 
 
@@ -21,9 +21,7 @@ class ContactUs(Resource):
             message = data.get('message')
             mail_info(email, firstname)
             mail_me(firstname, email, mobile_no, message)
-            Contact.insert_info(firstname, lastname, email, mobile_no, message)
-            status[200]['message'] = "we will contact you soon"
-            return constants.response(status[200])
+            return resp.http_200(data="we will contact you soon")
         except Exception as ex:
             logger.info(ex)
-            return constants.response(status[500])
+            return resp.http_500()

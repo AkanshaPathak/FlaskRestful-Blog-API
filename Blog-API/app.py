@@ -13,8 +13,7 @@ from services.user.validate import ValidateOtp, ResendOtp, ResetPassword, Genera
 from services.org.contact import ContactUs
 
 # Supportive imports
-from src.constant import Constant
-from src.response_status import status
+from src.response import Resp
 from src.query_base.user_query import User
 from src.main_logger import set_up_logging
 from blacklist import BLACKLIST
@@ -23,7 +22,7 @@ app = Flask(__name__)
 CORS(app)
 api = Api(app)
 
-constants = Constant()
+resp = Resp()
 logger = set_up_logging()
 
 app.config["JWT_BLACKLIST_ENABLED"] = True  # enable blacklist feature
@@ -47,8 +46,8 @@ def add_claims_to_access_token(identity):
         token. This method is passed the identity of whom the token is being
         created for, and must return data that is json serializable.
     """
-    user_info = constants.USER_CLAIM
-    constants.USER_CLAIM = None
+    user_info = resp.USER_CLAIM
+    resp.USER_CLAIM = None
     return {
         "Admin": user_info[-2],
         "name": user_info[2],
@@ -70,22 +69,19 @@ class Login(Resource):
             password = data['password']
             valid_user = User.user_exists(email)['data']
             valid_user = valid_user[0]
-            constants.USER_CLAIM = valid_user
+            resp.USER_CLAIM = valid_user
             if not valid_user:
-                status[404]["message"] = "You don't have user account."
-                return constants.response(status[404])
+                return resp.http_404(data="You don't have user account.")
             if check_password_hash(valid_user[3], password):
                 access_token = create_access_token(identity=valid_user[0], fresh=True)
                 refresh_token = create_refresh_token(valid_user[0])
-                status[200]["message"] = {"username": valid_user[2], "access-token": access_token,
-                                          "refresh-token": refresh_token}
-                return constants.response(status[200])
+                return resp.http_200(data={"username": valid_user[2], "access-token": access_token,
+                                           "refresh-token": refresh_token})
             else:
-                status[401]["message"] = "password is not valid"
-                return constants.response(status[401])
+                return resp.http_401(data="password is not valid")
         except Exception as ex:
             logger.exception(ex)
-            return constants.response(status[500])
+            return resp.http_500()
 
 
 api.add_resource(Home, '/')
@@ -99,5 +95,7 @@ api.add_resource(ResendOtp, '/resend-otp')
 api.add_resource(ResetPassword, '/reset-password')  # first step, Request for url on mail
 api.add_resource(GenerateReset, '/forgot-password/<string:hash_val>')  # second step open url and we get hash
 api.add_resource(ValidateReset, '/change-password')  # validate hash and change password
+
+
 if __name__ == '__main__':
     app.run()

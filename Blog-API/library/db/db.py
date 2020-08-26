@@ -1,5 +1,4 @@
 from mysql import connector
-from mysql.connector import FieldType
 from src.main_logger import set_up_logging
 import json
 
@@ -7,95 +6,73 @@ logger = set_up_logging()
 
 
 class Database:
-    def __init__(self, config=None):
-        self.config = self.get_config(config)
+    def __init__(self):
+        self.__get_config()
+        self.__create_connection()
 
-    @staticmethod
-    def get_config(config):
-        db_name = "mysql" if not config else config
+    def __enter__(self):
+        return self
+
+    def __del__(self, exc_type, exc_val, exc_tb):
+        self.__close__()
+
+    def __close__(self):
+        self._cursor.close()
+        self._connection.close()
+
+    # Below are all private functions to be used within this class
+
+    def __get_config(self):
         with open("src/mysql_db.json", 'r') as file:
-            db_config = json.load(file)[db_name]
-        logger.info(db_config)
-        return db_config
+            self.config = json.load(file)['mysql']
+        logger.info(self.config)
+        return self.config
 
-    def connection(self, query, cursor_type, metadata=False):
-        connection = connector.connect(**self.config)
-        cursor = connection.cursor(cursor_type)
-        cursor.execute(query)
-        query_result = cursor.fetchall()
-        if metadata:
-            total_rows = cursor.rowcount
-            meta_data = []
-            for col_index, desc in enumerate(cursor.description):
-                meta_data.append({'colIndex': col_index,
-                                  'colName': desc[0],
-                                  'colType': FieldType.get_info(desc[1])})
-            out = (meta_data, total_rows, query_result)
-        else:
-            out = query_result
-        cursor.close()
-        connection.close()
-        return out
+    def __create_connection(self):
+        self._connection = connector.connect(**self.config)
+        return self._connection
 
-    def set_data(self, query):
+    # cursor is private,
+    # you can use this to do database operation inside derived class if Inheriting Database class.
+    def __create_cursor(self):
+        self._cursor = self._connection.cursor(dictionary=True)
+        return self._cursor
+
+    def __execute(self, query):
         try:
-            connection = connector.connect(**self.config)
-            cursor = connection.cursor()
-            cursor.execute(query)
-            connection.commit()
-            cursor.close()
-            connection.close()
-            return {'data': 1,
-                    'error': False,
-                    'status': {'code': '200', 'value': 'Success'},
-                    'version': {'name': 'Raxoweb', 'version': '1.0.0.0'}}
-
+            self._cursor.execute(query)
+            self._connection.commit()
+            return 1
         except Exception as ex:
-            return {'data': 0,
-                    'sqlError': str(ex),
-                    'error': False,
-                    'status': {'code': '200', 'value': 'Success'},
-                    'version': {'name': 'Raxoweb', 'version': '1.0.0.0'}}
+            logger.exception(ex)
+            return 0
+        finally:
+            self.__close__()
 
-    def execute_query(self, query, cursor_type='list'):
-        try:
-            query_result = self.connection(query, cursor_type)
-            resp = {'data': {'result': {'metaData': query_result[0],
-                                        'queryInfo': {'totalRows': query_result[1], 'type': 'selected'},
-                                        'resultSet': query_result[2]}},
-                    'error': False,
-                    'status': {'code': '200', 'value': 'Success'},
-                    'version': {'name': 'Raxoweb', 'version': '1.0.0.0'}}
-            return resp
-        except Exception as ex:
-            return {'data': None,
-                    'error': False,
-                    'sqlError': str(ex),
-                    'status': {'code': '200', 'value': 'Success'},
-                    'version': {'name': 'Raxoweb', 'version': '1.0.0.0'}}
+    # Below are public functions to be called for database operation.
 
-    def receive_query(self, query, cursor_type='dict'):
+    def select(self, query):
         try:
-            query_result = self.connection(query, cursor_type)
+            self._cursor.execute(query)
+            query_result = self._cursor.fetchall()
+            total_rows = self._cursor.rowcount
             resp = {'data': query_result,
-                    'error': False,
-                    'status': {'code': '200', 'value': 'Success'},
-                    'version': {'name': 'Raxoweb', 'version': '1.0.0.0'}}
+                    "row_count": total_rows,
+                    'sqlerror': False
+                    }
             return resp
-
         except Exception as ex:
+            return {'data': {},
+                    'sqlError': str(ex)
+                    }
+        finally:
+            self.__close__()
 
-            return {'data': None,
-                    'error': False,
-                    'sqlError': str(ex),
-                    'status': {'code': '200', 'value': 'Success'},
-                    'version': {'name': 'Raxoweb', 'version': '1.0.0.0'}}
+    def insert(self, query):
+        return self.__execute(query)
 
-    def insert_query(self, query):
-        return self.set_data(query)
-
-    def update_query(self, query):
-        return self.set_data(query)
+    def update(self, query):
+        return self.__execute(query)
 
     def delete(self, query):
-        return self.set_data(query)
+        return self.__execute(query)
